@@ -1,0 +1,2 @@
+module Buteo
+plugin buteo-syncfw-qml
