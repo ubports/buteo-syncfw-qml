@@ -17,6 +17,7 @@
 #include <QtCore/QObject>
 #include <QtQml/QQmlParserStatus>
 #include <QtDBus/QDBusInterface>
+#include <QtDBus/QDBusServiceWatcher>
 
 class ButeoSyncFW : public QObject, public QQmlParserStatus
 {
@@ -25,6 +26,7 @@ class ButeoSyncFW : public QObject, public QQmlParserStatus
 
     Q_PROPERTY(bool syncing READ syncing NOTIFY syncStatus)
     Q_PROPERTY(QStringList visibleSyncProfiles READ visibleSyncProfiles NOTIFY profileChanged)
+
 public:
     ButeoSyncFW(QObject *parent = 0);
 
@@ -167,6 +169,13 @@ public slots:
      */
     bool removeProfile(const QString &profileId) const;
 
+private slots:
+    void serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
+
 private:
     QScopedPointer<QDBusInterface> m_iface;
+    QScopedPointer<QDBusServiceWatcher> m_serviceWatcher;
+
+    void initialize();
+    void deinitialize();
 };

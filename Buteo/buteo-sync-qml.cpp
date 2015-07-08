@@ -50,11 +50,29 @@ void ButeoSyncFW::classBegin()
 
 void ButeoSyncFW::componentComplete()
 {
+    m_serviceWatcher.reset(new QDBusServiceWatcher(BUTEO_DBUS_SERVICE_NAME,
+                                                   QDBusConnection::sessionBus(),
+                                                   QDBusServiceWatcher::WatchForOwnerChange,
+                                                   this));
+    connect(m_serviceWatcher.data(), SIGNAL(serviceOwnerChanged(QString,QString,QString)),
+            this, SLOT(serviceOwnerChanged(QString,QString,QString)));
+
+    initialize();
+}
+
+void ButeoSyncFW::initialize()
+{
+    if (!m_iface.isNull()) {
+        return;
+    }
+
     m_iface.reset(new QDBusInterface(BUTEO_DBUS_SERVICE_NAME,
                                      BUTEO_DBUS_OBJECT_PATH,
                                      BUTEO_DBUS_INTERFACE));
-    if (m_iface->lastError().isValid()) {
-        qWarning() << "Fail to connect with sync monitor:" << m_iface->lastError();
+
+    if (!m_iface->isValid()) {
+        m_iface.reset();
+        qWarning() << "Fail to connect with syncfw";
         return;
     }
 
@@ -64,6 +82,10 @@ void ButeoSyncFW::componentComplete()
     connect(m_iface.data(),
             SIGNAL(signalProfileChanged(QString, int, QString)),
             SIGNAL(profileChanged(QString, int, QString)), Qt::QueuedConnection);
+
+    // notify changes on properties
+    emit syncStatus("", 0, "", 0);
+    emit profileChanged("", 0, "");
 }
 
 bool ButeoSyncFW::startSync(const QString &aProfileId) const
@@ -156,4 +178,27 @@ bool ButeoSyncFW::removeProfile(const QString &profileId) const
         return result;
     }
     return false;
+}
+
+void ButeoSyncFW::serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner)
+{
+    Q_UNUSED(oldOwner);
+
+    if (name == BUTEO_DBUS_SERVICE_NAME) {
+        if (!newOwner.isEmpty()) {
+            // service appear
+            initialize();
+        } else if (!m_iface.isNull()) {
+            // lost service
+            deinitialize();
+        }
+    }
+}
+
+void ButeoSyncFW::deinitialize()
+{
+    m_iface.reset();
+    // notify changes on properties
+    emit syncStatus("", 0, "", 0);
+    emit profileChanged("", 0, "");
 }
