@@ -22,7 +22,7 @@ X-Ubuntu-Use-Langpack: yes
 Package: qtdeclarative5-buteo-syncfw0.1
 Architecture: any
 Multi-Arch: same
-Pre-Depends: dpkg (>= 1.15.6~)
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${misc:Depends},
          ${shlibs:Depends},
          buteo-syncfw-qt5,
