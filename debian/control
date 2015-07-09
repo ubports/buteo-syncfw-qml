@@ -1,5 +1,5 @@
 Source: buteo-syncfw-qml
-Section: gnome
+Section: libs
 Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 Build-Depends: cmake,
