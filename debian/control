@@ -25,7 +25,7 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-         buteo-syncfw,
+Recommends: buteo-syncfw
 Description: Buteo sync framework client - QML bindings
  buteo-syncfw manages data synchronization
  .
