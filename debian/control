@@ -1,0 +1,34 @@
+Source: buteo-syncfw-qml
+Section: libs
+Priority: optional
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Build-Depends: cmake,
+               dbus-test-runner,
+               debhelper (>= 9),
+               pkg-config,
+               qml-module-qttest,
+               qtchooser,
+               qt5-default,               
+               qtbase5-dev,
+               qtdeclarative5-dev, 
+Standards-Version: 3.9.5
+Homepage: https://launchpad.net/buteo-syncfw-qml
+# if you don't have have commit access to this branch but would like to upload
+# directly to Ubuntu, don't worry: your changes will be merged back into the
+# upstream branch
+Vcs-Bzr: lp:buteo-syncfw-qml
+X-Ubuntu-Use-Langpack: yes
+
+Package: qtdeclarative5-buteo-syncfw0.1
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         buteo-syncfw-qt5,
+Description: Buteo sync framework client - QML bindings
+ buteo-syncfw manages data synchronization
+ .
+ This package contains the QML plugin providing the features from the buteo
+ to applications.
+
