@@ -24,7 +24,6 @@ Item {
     property var buteoComponent
 
     TestCase {
-        id: vcardParser
         name: 'ButeoSyncFWTestCase'
 
         function init()
@@ -45,6 +44,27 @@ Item {
                 buteoComponent.destroy()
                 buteoComponent = null
             }
+        }
+
+        function cleanupTestCase()
+        {
+            // Test service dissapear
+            // We can only test it on 'cleanupTestCase' because it will cause the dbus
+            // service to dissapear and any test after this call will fail
+            buteoComponent = Qt.createQmlObject('import Buteo 0.1; ButeoSync{ }', root);
+
+            var spy = Qt.createQmlObject('import QtTest 1.0; SignalSpy{ }', root);
+            spy.target = buteoComponent
+            spy.signalName = "syncStatus"
+
+            buteoComponent.abortSync('quit')
+
+            tryCompare(spy, "count", 1)
+            tryCompare(buteoComponent, 'syncing', false)
+            tryCompare(buteoComponent, 'visibleSyncProfiles', [])
+
+            buteoComponent.destroy()
+            buteoComponent = null
         }
 
         function test_start_sync()

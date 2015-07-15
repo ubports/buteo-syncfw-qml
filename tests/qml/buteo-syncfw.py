@@ -30,6 +30,7 @@ MAIN_IFACE = 'com.meego.msyncd'
 SYSTEM_BUS = False
 
 class ButeoSyncFw(dbus.service.Object):
+    DBUS_NAME = None
     PROFILES = [
 """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <profile type=\"sync\" name=\"test-profile\">
@@ -90,6 +91,7 @@ class ButeoSyncFw(dbus.service.Object):
 
     def __init__(self, object_path):
         dbus.service.Object.__init__(self, dbus.SessionBus(), object_path)
+        self._mainloop = GObject.MainLoop()
         self._activeSync = []
         self._profiles = ButeoSyncFw.PROFILES
 
@@ -112,6 +114,12 @@ class ButeoSyncFw(dbus.service.Object):
     @dbus.service.method(dbus_interface=MAIN_IFACE,
                          in_signature='s', out_signature='')
     def abortSync(self, profileId):
+        # WORKAROUND: using 'quit' as profileId will cause the service to dissapear
+        # used on unit test
+        if profileId == 'quit':
+            self.quit()
+            return
+
         if profileId in self._activeSync:
             self._activeSync.remove(profileId)
             self.syncStatus(profileId, 5, 'aborted by the user', 0)
@@ -151,13 +159,16 @@ class ButeoSyncFw(dbus.service.Object):
         else:
             return False
 
+    def quit(self):
+        ButeoSyncFw.DBUS_NAME = None
+        self._mainloop.quit()
 
+    def _run(self):
+        self._mainloop.run()
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-    name = dbus.service.BusName(BUS_NAME)
-    mainloop = GObject.MainLoop()
+    ButeoSyncFw.DBUS_NAME = dbus.service.BusName(BUS_NAME)
     buteo = ButeoSyncFw(MAIN_OBJ)
-    mainloop.run()
-
+    buteo._run()
