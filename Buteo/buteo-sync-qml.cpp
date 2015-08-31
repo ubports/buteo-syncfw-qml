@@ -26,13 +26,15 @@
 #define BUTEO_DBUS_INTERFACE      "com.meego.msyncd"
 
 ButeoSyncFW::ButeoSyncFW(QObject *parent)
-    : QObject(parent)
+    : QObject(parent),
+      m_busy(false)
 {
+    connect(this, SIGNAL(syncStatus(QString,int,QString,int)), SIGNAL(syncStatusChanged()));
 }
 
 bool ButeoSyncFW::syncing() const
 {
-    return !(getRunningSyncList().isEmpty());
+    return m_busy || !(getRunningSyncList().isEmpty());
 }
 
 QStringList ButeoSyncFW::visibleSyncProfiles() const
@@ -84,33 +86,61 @@ void ButeoSyncFW::initialize()
             SIGNAL(profileChanged(QString, int, QString)), Qt::QueuedConnection);
 
     // notify changes on properties
-    emit syncStatus("", 0, "", 0);
+    emit syncStatusChanged();
     emit profileChanged("", 0, "");
 }
 
 bool ButeoSyncFW::startSync(const QString &aProfileId) const
 {
     if (m_iface) {
-        QDBusReply<bool> result = m_iface->call("startSync", aProfileId);
-        return result.value();
+        QDBusReply<bool> reply = m_iface->call(QLatin1String("startSync"), aProfileId);
+        return reply.value();
     }
     return false;
 }
 
-bool ButeoSyncFW::startSyncByCategory(const QString &category) const
+bool ButeoSyncFW::startSyncByCategory(const QString &category)
 {
-    foreach(const QString &profile, syncProfilesByCategory(category)) {
-        if (!startSync(profile)) {
-            return false;
-        }
+
+    QDBusPendingCall pcall = m_iface->asyncCall("syncProfilesByKey", "category", category);
+    if (pcall.isError()) {
+        qWarning() << "Fail to call syncProfilesByKey:" << pcall.error().message();
+        return false;
+    } else {
+        m_busy = true;
+        emit syncStatusChanged();
+
+        QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(pcall, this);
+        connect(watcher, SIGNAL(finished(QDBusPendingCallWatcher*)),
+                this, SLOT(onSyncProfilesByKeyFinished(QDBusPendingCallWatcher*)));
     }
     return true;
+}
+
+void ButeoSyncFW::onSyncProfilesByKeyFinished(QDBusPendingCallWatcher *watcher)
+{
+    QStringList profiles;
+    QDBusPendingReply<QStringList> reply = *watcher;
+    if (reply.isError()) {
+       qWarning() << "Fail to call 'syncProfilesByKey'" << reply.error().message();
+    } else {
+       profiles = reply.value();
+    }
+
+    watcher->deleteLater();
+
+    QStringList ids = idsFromProfileList(profiles);
+    foreach(const QString &profile, ids) {
+        startSync(profile);
+    }
+    m_busy = false;
+    emit syncStatusChanged();
 }
 
 void ButeoSyncFW::abortSync(const QString &aProfileId) const
 {
     if (m_iface) {
-        m_iface->call("abortSync", aProfileId);
+        m_iface->asyncCall(QLatin1String("abortSync"), aProfileId);
     }
 }
 
@@ -127,46 +157,7 @@ QStringList ButeoSyncFW::syncProfilesByCategory(const QString &category) const
 {
     if (m_iface) {
          QDBusReply<QStringList> profiles = m_iface->call("syncProfilesByKey", "category", category);
-         // extract ids
-         QStringList ids;
-         foreach(const QString &profile, profiles.value()) {
-            QDomDocument doc;
-            QString errorMsg;
-            int errorLine;
-            int errorColumn;
-            if (doc.setContent(profile, &errorMsg, &errorLine, &errorColumn)) {
-               QDomNodeList profileElements = doc.elementsByTagName("profile");
-               if (!profileElements.isEmpty()) {
-                     //check if is enabled
-                     QDomElement e = profileElements.item(0).toElement();
-                     QDomNodeList values = e.elementsByTagName("key");
-                     bool enabled = true;
-                     for(int i = 0; i < values.count(); i++) {
-                         QDomElement v = values.at(i).toElement();
-                         if ((v.attribute("name") == "enabled") &&
-                             (v.attribute("value") == "false")) {
-                             enabled = false;
-                             continue;
-                         }
-                     }
-                     if (!enabled) {
-                         continue;
-                     }
-                     QString profileName = e.attribute("name", "");
-                     if (!profileName.isEmpty()) {
-                        ids << profileName;
-                     } else {
-                         qWarning() << "Profile name is empty in:" << profile;
-                     }
-               } else {
-                   qWarning() << "Profile not found in:" << profile;
-               }
-            } else {
-                qWarning() << "Fail to parse profile:" << profile;
-                qWarning() << "Error:" << errorMsg << errorLine << errorColumn;
-            }
-         }
-         return ids;
+         return idsFromProfileList(profiles.value());
     }
     return QStringList();
 }
@@ -201,4 +192,48 @@ void ButeoSyncFW::deinitialize()
     // notify changes on properties
     emit syncStatus("", 0, "", 0);
     emit profileChanged("", 0, "");
+}
+
+QStringList ButeoSyncFW::idsFromProfileList(const QStringList &profiles) const
+{
+    // extract ids
+    QStringList ids;
+    foreach(const QString &profile, profiles) {
+       QDomDocument doc;
+       QString errorMsg;
+       int errorLine;
+       int errorColumn;
+       if (doc.setContent(profile, &errorMsg, &errorLine, &errorColumn)) {
+          QDomNodeList profileElements = doc.elementsByTagName("profile");
+          if (!profileElements.isEmpty()) {
+                //check if is enabled
+                QDomElement e = profileElements.item(0).toElement();
+                QDomNodeList values = e.elementsByTagName("key");
+                bool enabled = true;
+                for(int i = 0; i < values.count(); i++) {
+                    QDomElement v = values.at(i).toElement();
+                    if ((v.attribute("name") == "enabled") &&
+                        (v.attribute("value") == "false")) {
+                        enabled = false;
+                        continue;
+                    }
+                }
+                if (!enabled) {
+                    continue;
+                }
+                QString profileName = e.attribute("name", "");
+                if (!profileName.isEmpty()) {
+                   ids << profileName;
+                } else {
+                    qWarning() << "Profile name is empty in:" << profile;
+                }
+          } else {
+              qWarning() << "Profile not found in:" << profile;
+          }
+       } else {
+           qWarning() << "Fail to parse profile:" << profile;
+           qWarning() << "Error:" << errorMsg << errorLine << errorColumn;
+       }
+    }
+    return ids;
 }

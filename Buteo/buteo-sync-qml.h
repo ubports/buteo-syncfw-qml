@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (C) 2015 Canonical, Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 #include <QtQml/QQmlParserStatus>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusServiceWatcher>
+#include <QtDBus/QDBusPendingCallWatcher>
 
 class ButeoSyncFW : public QObject, public QQmlParserStatus
 {
@@ -110,6 +111,11 @@ signals:
     void syncStatus(QString aProfileId, int aStatus,
                     QString aMessage, int aStatusDetails);
 
+    /*!
+     * syncStatus notify signal
+     */
+    void syncStatusChanged();
+
 public slots:
     /*!
      * \brief Requests to starts synchronizing using a profile Id
@@ -135,7 +141,7 @@ public slots:
      *
      * \see ButeoSyncFW::startSync
      */
-    bool startSyncByCategory(const QString &category) const;
+    bool startSyncByCategory(const QString &category);
 
     /*!
      * \brief Stops synchronizing the profile with the given Id.
@@ -171,11 +177,14 @@ public slots:
 
 private slots:
     void serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
+    void onSyncProfilesByKeyFinished(QDBusPendingCallWatcher *watcher);
 
 private:
     QScopedPointer<QDBusInterface> m_iface;
     QScopedPointer<QDBusServiceWatcher> m_serviceWatcher;
+    bool m_busy;
 
     void initialize();
     void deinitialize();
+    QStringList idsFromProfileList(const QStringList &profiles) const;
 };
