@@ -17,6 +17,7 @@
 #include "buteo-sync-qml.h"
 
 #include <QtCore/QDebug>
+#include <QtCore/QTimer>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusReply>
 #include <QtXml/QDomDocument>
@@ -28,7 +29,8 @@
 typedef QPair<QString, bool> ProfileData;
 
 ButeoSyncFW::ButeoSyncFW(QObject *parent)
-    : QObject(parent)
+    : QObject(parent),
+      m_waitSyncStart(false)
 {
     connect(this, SIGNAL(syncStatus(QString,int,QString,int)), SIGNAL(syncStatusChanged()));
     connect(this, SIGNAL(profileChanged(QString,int,QString)), SIGNAL(profilesChanged()));
@@ -36,7 +38,7 @@ ButeoSyncFW::ButeoSyncFW(QObject *parent)
 
 bool ButeoSyncFW::syncing() const
 {
-    return !(getRunningSyncList().isEmpty());
+    return (m_waitSyncStart || !getRunningSyncList().isEmpty());
 }
 
 QStringList ButeoSyncFW::visibleSyncProfiles() const
@@ -51,10 +53,6 @@ int ButeoSyncFW::profilesCount() const
 
 void ButeoSyncFW::classBegin()
 {
-}
-
-void ButeoSyncFW::componentComplete()
-{
     m_serviceWatcher.reset(new QDBusServiceWatcher(BUTEO_DBUS_SERVICE_NAME,
                                                    QDBusConnection::sessionBus(),
                                                    QDBusServiceWatcher::WatchForOwnerChange,
@@ -65,12 +63,17 @@ void ButeoSyncFW::componentComplete()
     initialize();
 }
 
+void ButeoSyncFW::componentComplete()
+{
+}
+
 void ButeoSyncFW::initialize()
 {
     if (!m_iface.isNull()) {
         return;
     }
 
+    m_waitSyncStart = false;
     m_iface.reset(new QDBusInterface(BUTEO_DBUS_SERVICE_NAME,
                                      BUTEO_DBUS_OBJECT_PATH,
                                      BUTEO_DBUS_INTERFACE));
@@ -81,31 +84,45 @@ void ButeoSyncFW::initialize()
         return;
     }
 
-    // keep profile map in sync
-    connect(m_iface.data(),
-            SIGNAL(signalProfileChanged(QString, int, QString)),
-            SLOT(reloadProfiles()));
-    reloadProfiles();
-
     connect(m_iface.data(),
             SIGNAL(syncStatus(QString, int, QString, int)),
-            SIGNAL(syncStatus(QString, int, QString, int)), Qt::QueuedConnection);
+            SIGNAL(syncStatus(QString, int, QString, int)));
     connect(m_iface.data(),
             SIGNAL(signalProfileChanged(QString, int, QString)),
             SIGNAL(profileChanged(QString, int, QString)), Qt::QueuedConnection);
 
+    // track signals for internal state
+    connect(m_iface.data(),
+            SIGNAL(signalProfileChanged(QString, int, QString)),
+            SLOT(reloadProfiles()));
+    connect(m_iface.data(),
+            SIGNAL(syncStatus(QString, int, QString, int)),
+            SLOT(onSyncStatusChanged()));
+
+    reloadProfiles();
+
     // notify changes on properties
-    emit profilesChanged();
     emit syncStatusChanged();
 }
 
-bool ButeoSyncFW::startSync(const QString &aProfileId) const
+bool ButeoSyncFW::startSync(const QString &aProfileId)
 {
-    if (m_iface) {
-        QDBusReply<bool> reply = m_iface->call(QLatin1String("startSync"), aProfileId);
-        return reply.value();
+    if (!m_iface) {
+        return false;
     }
-    return false;
+
+    QDBusPendingCall pcall = m_iface->asyncCall(QLatin1String("startSync"), aProfileId);
+    if (pcall.isError()) {
+        qWarning() << "Fail to start sync:" << pcall.error().message();
+        return false;
+    }
+
+    if (!m_waitSyncStart) {
+        m_waitSyncStart = true;
+        emit syncStatusChanged();
+    }
+
+    return true;
 }
 
 bool ButeoSyncFW::startSyncByCategory(const QString &category)
@@ -130,7 +147,7 @@ void ButeoSyncFW::abortSync(const QString &aProfileId) const
 QStringList ButeoSyncFW::getRunningSyncList() const
 {
     if (m_iface) {
-        QDBusReply<QStringList> syncList = m_iface->call("runningSyncs");
+        QDBusReply<QStringList> syncList = m_iface->call(QLatin1String("runningSyncs"));
         return syncList;
     }
     return QStringList();
@@ -144,7 +161,7 @@ QStringList ButeoSyncFW::syncProfilesByCategory(const QString &category) const
 bool ButeoSyncFW::removeProfile(const QString &profileId) const
 {
     if (m_iface) {
-        QDBusReply<bool> result = m_iface->call("removeProfile", profileId);
+        QDBusReply<bool> result = m_iface->call(QLatin1String("removeProfile"), profileId);
         return result;
     }
     return false;
@@ -167,6 +184,7 @@ void ButeoSyncFW::serviceOwnerChanged(const QString &name, const QString &oldOwn
 
 void ButeoSyncFW::deinitialize()
 {
+    m_waitSyncStart = false;
     m_profilesByCategory.clear();
     m_reloadProfilesWatcher.reset();
     m_iface.reset();
@@ -247,9 +265,12 @@ void ButeoSyncFW::reloadProfiles()
         return;
     }
 
-    QDBusPendingCall pcall = m_iface->asyncCall("allVisibleSyncProfiles");
+    // we only care about profiles that uses online-accounts
+    QDBusPendingCall pcall = m_iface->asyncCall(QLatin1String("syncProfilesByKey"),
+                                                QLatin1String("use_accounts"),
+                                                QLatin1String("true"));
     if (pcall.isError()) {
-        qWarning() << "Fail to call allVisibleSyncProfiles:" << pcall.error().message();
+        qWarning() << "Fail to call syncProfilesByKey:" << pcall.error().message();
     } else {
         m_reloadProfilesWatcher.reset(new QDBusPendingCallWatcher(pcall, this));
         connect(m_reloadProfilesWatcher.data(), SIGNAL(finished(QDBusPendingCallWatcher*)),
@@ -262,7 +283,7 @@ void ButeoSyncFW::onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watc
     QStringList profiles;
     QDBusPendingReply<QStringList> reply = *watcher;
     if (reply.isError()) {
-       qWarning() << "Fail to call 'allVisibleSyncProfiles'" << reply.error().message();
+       qWarning() << "Fail to call 'syncProfilesByKey'" << reply.error().message();
     } else {
        profiles = reply.value();
     }
@@ -272,4 +293,9 @@ void ButeoSyncFW::onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watc
 
     // notify property change
     emit profilesChanged();
+}
+
+void ButeoSyncFW::onSyncStatusChanged()
+{
+    m_waitSyncStart = false;
 }

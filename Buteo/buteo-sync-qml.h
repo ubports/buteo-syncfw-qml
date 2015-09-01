@@ -133,7 +133,7 @@ public slots:
      * \return True if a profile with the Id was found. Otherwise
      *  false and no status change signals will follow from this request.
      */
-    bool startSync(const QString &aProfileId) const;
+    bool startSync(const QString &aProfileId);
 
     /*!
      * \brief Requests to starts synchronizing using a profile category
@@ -182,6 +182,7 @@ private slots:
     void serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
     void onSyncProfilesByKeyFinished(QDBusPendingCallWatcher *watcher);
     void onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watcher);
+    void onSyncStatusChanged();
     void reloadProfiles();
 
 private:
@@ -189,6 +190,7 @@ private:
     QScopedPointer<QDBusServiceWatcher> m_serviceWatcher;
     QScopedPointer<QDBusPendingCallWatcher> m_reloadProfilesWatcher;
     QMultiMap<QString, QPair<QString, bool> > m_profilesByCategory;
+    bool m_waitSyncStart;
 
     void initialize();
     void deinitialize();
