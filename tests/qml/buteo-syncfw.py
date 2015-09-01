@@ -142,12 +142,12 @@ class ButeoSyncFw(dbus.service.Object):
     @dbus.service.signal(dbus_interface=MAIN_IFACE,
                          signature='sisi')
     def syncStatus(self, profileId, status, message, statusDetails):
-        print("SyncStatus called")
+        pass
 
     @dbus.service.signal(dbus_interface=MAIN_IFACE,
                          signature='sis')
     def signalProfileChanged(self, profileId, status, changedProfile):
-        print("profileChanged called")
+        pass
 
     @dbus.service.method(dbus_interface=MAIN_IFACE,
                          in_signature='s', out_signature='b')

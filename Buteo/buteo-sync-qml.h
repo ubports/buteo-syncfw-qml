@@ -26,6 +26,7 @@ class ButeoSyncFW : public QObject, public QQmlParserStatus
     Q_INTERFACES(QQmlParserStatus)
 
     Q_PROPERTY(bool syncing READ syncing NOTIFY syncStatus)
+    Q_PROPERTY(int profilesCount READ profilesCount NOTIFY profileChanged)
     Q_PROPERTY(QStringList visibleSyncProfiles READ visibleSyncProfiles NOTIFY profileChanged)
 
 public:
@@ -33,6 +34,7 @@ public:
 
     bool syncing() const;
     QStringList visibleSyncProfiles() const;
+    int profilesCount() const;
 
     // QQmlParserStatus
     void classBegin();
@@ -178,13 +180,17 @@ public slots:
 private slots:
     void serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
     void onSyncProfilesByKeyFinished(QDBusPendingCallWatcher *watcher);
+    void onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watcher);
+    void reloadProfiles();
 
 private:
     QScopedPointer<QDBusInterface> m_iface;
     QScopedPointer<QDBusServiceWatcher> m_serviceWatcher;
-    bool m_busy;
+    QScopedPointer<QDBusPendingCallWatcher> m_reloadProfilesWatcher;
+    QMultiMap<QString, QPair<QString, bool> > m_profilesByCategory;
 
     void initialize();
     void deinitialize();
-    QStringList idsFromProfileList(const QStringList &profiles) const;
+    QStringList profiles(const QString &category = QString(), bool onlyEnabled=false) const;
+    QMultiMap<QString, QPair<QString, bool> > paserProfiles(const QStringList &profiles) const;
 };
