@@ -31,6 +31,7 @@ ButeoSyncFW::ButeoSyncFW(QObject *parent)
     : QObject(parent)
 {
     connect(this, SIGNAL(syncStatus(QString,int,QString,int)), SIGNAL(syncStatusChanged()));
+    connect(this, SIGNAL(profileChanged(QString,int,QString)), SIGNAL(profilesChanged()));
 }
 
 bool ButeoSyncFW::syncing() const
@@ -93,10 +94,9 @@ void ButeoSyncFW::initialize()
             SIGNAL(signalProfileChanged(QString, int, QString)),
             SIGNAL(profileChanged(QString, int, QString)), Qt::QueuedConnection);
 
-
     // notify changes on properties
+    emit profilesChanged();
     emit syncStatusChanged();
-    emit profileChanged("", 0, "");
 }
 
 bool ButeoSyncFW::startSync(const QString &aProfileId) const
@@ -171,10 +171,9 @@ void ButeoSyncFW::deinitialize()
     m_reloadProfilesWatcher.reset();
     m_iface.reset();
 
-
     // notify changes on properties
-    emit syncStatus("", 0, "", 0);
-    emit profileChanged("", 0, "");
+    emit profilesChanged();
+    emit syncStatusChanged();
 }
 
 QStringList ButeoSyncFW::profiles(const QString &category, bool onlyEnabled) const
@@ -270,5 +269,7 @@ void ButeoSyncFW::onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watc
 
     m_profilesByCategory = paserProfiles(profiles);
     m_reloadProfilesWatcher.take()->deleteLater();
-}
 
+    // notify property change
+    emit profilesChanged();
+}

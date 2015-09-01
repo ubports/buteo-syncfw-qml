@@ -57,7 +57,7 @@ Item {
 
             var spy = Qt.createQmlObject('import QtTest 1.0; SignalSpy{ }', root);
             spy.target = buteoComponent
-            spy.signalName = "syncStatus"
+            spy.signalName = "profilesChanged"
 
             buteoComponent.abortSync('quit')
 
