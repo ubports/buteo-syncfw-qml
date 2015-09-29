@@ -48,7 +48,7 @@ QStringList ButeoSyncFW::visibleSyncProfiles() const
 
 int ButeoSyncFW::profilesCount() const
 {
-    return visibleSyncProfiles().count();
+    return profiles().count();
 }
 
 void ButeoSyncFW::classBegin()
