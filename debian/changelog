@@ -1,3 +1,21 @@
+buteo-syncfw-qml (0.1+15.10.20150929-0ubuntu1) wily; urgency=medium
+
+  [ Ken VanDine ]
+  * Cleaned up white space and dropped langpack reference
+
+  [ Renato Araujo Oliveira Filho ]
+  * Added coverage. Use async dbus call for "syncProfilesByKey".
+  * Implemented QML bindings for buteo syncfw DBUS service. added: .bzr-
+    builddeb/ .bzr-builddeb/default.conf Buteo/ Buteo/CMakeLists.txt
+    Buteo/buteo-sync-qml.cpp Buteo/buteo-sync-qml.h Buteo/plugin.cpp
+    Buteo/plugin.h Buteo/qmldir CMakeLists.txt cmake_uninstall.cmake.in
+    debian/ debian/changelog debian/compat debian/control
+    debian/copyright debian/rules tests/ tests/CMakeLists.txt tests/qml/
+    tests/qml/CMakeLists.txt tests/qml/buteo-syncfw.py
+    tests/qml/tst_ButeoSyncFW.qml
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 29 Sep 2015 19:16:56 +0000
+
 buteo-syncfw-qml (0.1-0ubuntu1) vivid; urgency=medium
 
   * New package
