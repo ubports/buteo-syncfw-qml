@@ -8,16 +8,15 @@ Build-Depends: cmake,
                pkg-config,
                qml-module-qttest,
                qtchooser,
-               qt5-default,               
+               qt5-default,
                qtbase5-dev,
-               qtdeclarative5-dev, 
+               qtdeclarative5-dev,
 Standards-Version: 3.9.5
 Homepage: https://launchpad.net/buteo-syncfw-qml
 # if you don't have have commit access to this branch but would like to upload
 # directly to Ubuntu, don't worry: your changes will be merged back into the
 # upstream branch
 Vcs-Bzr: lp:buteo-syncfw-qml
-X-Ubuntu-Use-Langpack: yes
 
 Package: qtdeclarative5-buteo-syncfw0.1
 Architecture: any
