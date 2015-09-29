@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (C) 2015 Canonical, Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 #include "buteo-sync-qml.h"
 
 #include <QtCore/QDebug>
+#include <QtCore/QTimer>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusReply>
 #include <QtXml/QDomDocument>
@@ -25,30 +26,32 @@
 #define BUTEO_DBUS_OBJECT_PATH    "/synchronizer"
 #define BUTEO_DBUS_INTERFACE      "com.meego.msyncd"
 
+typedef QPair<QString, bool> ProfileData;
+
 ButeoSyncFW::ButeoSyncFW(QObject *parent)
-    : QObject(parent)
+    : QObject(parent),
+      m_waitSyncStart(false)
 {
+    connect(this, SIGNAL(syncStatus(QString,int,QString,int)), SIGNAL(syncStatusChanged()));
+    connect(this, SIGNAL(profileChanged(QString,int,QString)), SIGNAL(profilesChanged()));
 }
 
 bool ButeoSyncFW::syncing() const
 {
-    return !(getRunningSyncList().isEmpty());
+    return (m_waitSyncStart || !getRunningSyncList().isEmpty());
 }
 
 QStringList ButeoSyncFW::visibleSyncProfiles() const
 {
-    if (m_iface) {
-        QDBusReply<QStringList> result = m_iface->call("allVisibleSyncProfiles");
-        return result.value();
-    }
-    return QStringList();
+    return profiles();
+}
+
+int ButeoSyncFW::profilesCount() const
+{
+    return profiles().count();
 }
 
 void ButeoSyncFW::classBegin()
-{
-}
-
-void ButeoSyncFW::componentComplete()
 {
     m_serviceWatcher.reset(new QDBusServiceWatcher(BUTEO_DBUS_SERVICE_NAME,
                                                    QDBusConnection::sessionBus(),
@@ -60,12 +63,17 @@ void ButeoSyncFW::componentComplete()
     initialize();
 }
 
+void ButeoSyncFW::componentComplete()
+{
+}
+
 void ButeoSyncFW::initialize()
 {
     if (!m_iface.isNull()) {
         return;
     }
 
+    m_waitSyncStart = false;
     m_iface.reset(new QDBusInterface(BUTEO_DBUS_SERVICE_NAME,
                                      BUTEO_DBUS_OBJECT_PATH,
                                      BUTEO_DBUS_INTERFACE));
@@ -78,46 +86,68 @@ void ButeoSyncFW::initialize()
 
     connect(m_iface.data(),
             SIGNAL(syncStatus(QString, int, QString, int)),
-            SIGNAL(syncStatus(QString, int, QString, int)), Qt::QueuedConnection);
+            SIGNAL(syncStatus(QString, int, QString, int)));
     connect(m_iface.data(),
             SIGNAL(signalProfileChanged(QString, int, QString)),
             SIGNAL(profileChanged(QString, int, QString)), Qt::QueuedConnection);
 
+    // track signals for internal state
+    connect(m_iface.data(),
+            SIGNAL(signalProfileChanged(QString, int, QString)),
+            SLOT(reloadProfiles()));
+    connect(m_iface.data(),
+            SIGNAL(syncStatus(QString, int, QString, int)),
+            SLOT(onSyncStatusChanged()));
+
+    reloadProfiles();
+
     // notify changes on properties
-    emit syncStatus("", 0, "", 0);
-    emit profileChanged("", 0, "");
+    emit syncStatusChanged();
 }
 
-bool ButeoSyncFW::startSync(const QString &aProfileId) const
+bool ButeoSyncFW::startSync(const QString &aProfileId)
 {
-    if (m_iface) {
-        QDBusReply<bool> result = m_iface->call("startSync", aProfileId);
-        return result.value();
+    if (!m_iface) {
+        return false;
     }
-    return false;
+
+    QDBusPendingCall pcall = m_iface->asyncCall(QLatin1String("startSync"), aProfileId);
+    if (pcall.isError()) {
+        qWarning() << "Fail to start sync:" << pcall.error().message();
+        return false;
+    }
+
+    if (!m_waitSyncStart) {
+        m_waitSyncStart = true;
+        emit syncStatusChanged();
+    }
+
+    return true;
 }
 
-bool ButeoSyncFW::startSyncByCategory(const QString &category) const
+bool ButeoSyncFW::startSyncByCategory(const QString &category)
 {
     foreach(const QString &profile, syncProfilesByCategory(category)) {
         if (!startSync(profile)) {
             return false;
         }
     }
+
     return true;
 }
+
 
 void ButeoSyncFW::abortSync(const QString &aProfileId) const
 {
     if (m_iface) {
-        m_iface->call("abortSync", aProfileId);
+        m_iface->asyncCall(QLatin1String("abortSync"), aProfileId);
     }
 }
 
 QStringList ButeoSyncFW::getRunningSyncList() const
 {
     if (m_iface) {
-        QDBusReply<QStringList> syncList = m_iface->call("runningSyncs");
+        QDBusReply<QStringList> syncList = m_iface->call(QLatin1String("runningSyncs"));
         return syncList;
     }
     return QStringList();
@@ -125,56 +155,13 @@ QStringList ButeoSyncFW::getRunningSyncList() const
 
 QStringList ButeoSyncFW::syncProfilesByCategory(const QString &category) const
 {
-    if (m_iface) {
-         QDBusReply<QStringList> profiles = m_iface->call("syncProfilesByKey", "category", category);
-         // extract ids
-         QStringList ids;
-         foreach(const QString &profile, profiles.value()) {
-            QDomDocument doc;
-            QString errorMsg;
-            int errorLine;
-            int errorColumn;
-            if (doc.setContent(profile, &errorMsg, &errorLine, &errorColumn)) {
-               QDomNodeList profileElements = doc.elementsByTagName("profile");
-               if (!profileElements.isEmpty()) {
-                     //check if is enabled
-                     QDomElement e = profileElements.item(0).toElement();
-                     QDomNodeList values = e.elementsByTagName("key");
-                     bool enabled = true;
-                     for(int i = 0; i < values.count(); i++) {
-                         QDomElement v = values.at(i).toElement();
-                         if ((v.attribute("name") == "enabled") &&
-                             (v.attribute("value") == "false")) {
-                             enabled = false;
-                             continue;
-                         }
-                     }
-                     if (!enabled) {
-                         continue;
-                     }
-                     QString profileName = e.attribute("name", "");
-                     if (!profileName.isEmpty()) {
-                        ids << profileName;
-                     } else {
-                         qWarning() << "Profile name is empty in:" << profile;
-                     }
-               } else {
-                   qWarning() << "Profile not found in:" << profile;
-               }
-            } else {
-                qWarning() << "Fail to parse profile:" << profile;
-                qWarning() << "Error:" << errorMsg << errorLine << errorColumn;
-            }
-         }
-         return ids;
-    }
-    return QStringList();
+    return profiles(category, true);
 }
 
 bool ButeoSyncFW::removeProfile(const QString &profileId) const
 {
     if (m_iface) {
-        QDBusReply<bool> result = m_iface->call("removeProfile", profileId);
+        QDBusReply<bool> result = m_iface->call(QLatin1String("removeProfile"), profileId);
         return result;
     }
     return false;
@@ -197,8 +184,118 @@ void ButeoSyncFW::serviceOwnerChanged(const QString &name, const QString &oldOwn
 
 void ButeoSyncFW::deinitialize()
 {
+    m_waitSyncStart = false;
+    m_profilesByCategory.clear();
+    m_reloadProfilesWatcher.reset();
     m_iface.reset();
+
     // notify changes on properties
-    emit syncStatus("", 0, "", 0);
-    emit profileChanged("", 0, "");
+    emit profilesChanged();
+    emit syncStatusChanged();
+}
+
+QStringList ButeoSyncFW::profiles(const QString &category, bool onlyEnabled) const
+{
+    QStringList result;
+    QList<ProfileData> filter = category.isEmpty() ?
+                m_profilesByCategory.values() : m_profilesByCategory.values(category);
+
+    foreach(const ProfileData &p, filter) {
+        if (!onlyEnabled || p.second) {
+            result << p.first;
+        }
+    }
+    return result;
+}
+
+
+QMultiMap<QString, QPair<QString, bool> >  ButeoSyncFW::paserProfiles(const QStringList &profiles) const
+{
+    // extract category/ids
+    QMultiMap<QString, ProfileData> profilesByCategory;
+
+    foreach(const QString &profile, profiles) {
+       QDomDocument doc;
+       QString errorMsg;
+       int errorLine;
+       int errorColumn;
+       if (doc.setContent(profile, &errorMsg, &errorLine, &errorColumn)) {
+          QDomNodeList profileElements = doc.elementsByTagName("profile");
+          if (!profileElements.isEmpty()) {
+                //check if is enabled
+                QDomElement e = profileElements.item(0).toElement();
+                QDomNodeList values = e.elementsByTagName("key");
+                bool enabled = true;
+                QString profileCategory;
+                for(int i = 0; i < values.count(); i++) {
+                    QDomElement v = values.at(i).toElement();
+                    if ((v.attribute("name") == "enabled") &&
+                        (v.attribute("value") == "false")) {
+                        enabled = false;
+                    }
+                    if (v.attribute("name") == "category") {
+                        profileCategory = v.attribute("value");
+                    }
+                }
+
+                QString profileName = e.attribute("name", "");
+                if (profileName.isEmpty() || profileCategory.isEmpty()) {
+                    qWarning() << "Fail to retrieve profile name and category";
+                } else {
+                    profilesByCategory.insertMulti(profileCategory, qMakePair(profileName, enabled));
+                }
+          } else {
+              qWarning() << "Profile not found in:" << profile;
+          }
+       } else {
+           qWarning() << "Fail to parse profile:" << profile;
+           qWarning() << "Error:" << errorMsg << errorLine << errorColumn;
+       }
+    }
+    return profilesByCategory;
+}
+
+void ButeoSyncFW::reloadProfiles()
+{
+    if (m_reloadProfilesWatcher) {
+        m_reloadProfilesWatcher.reset();
+    }
+
+    if (!m_iface) {
+        return;
+    }
+
+    // we only care about profiles that uses online-accounts
+    QDBusPendingCall pcall = m_iface->asyncCall(QLatin1String("syncProfilesByKey"),
+                                                QLatin1String("use_accounts"),
+                                                QLatin1String("true"));
+    if (pcall.isError()) {
+        qWarning() << "Fail to call syncProfilesByKey:" << pcall.error().message();
+    } else {
+        m_reloadProfilesWatcher.reset(new QDBusPendingCallWatcher(pcall, this));
+        connect(m_reloadProfilesWatcher.data(), SIGNAL(finished(QDBusPendingCallWatcher*)),
+                SLOT(onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher*)), Qt::UniqueConnection);
+    }
+}
+
+void ButeoSyncFW::onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watcher)
+{
+    QStringList profiles;
+    QDBusPendingReply<QStringList> reply = *watcher;
+    if (reply.isError()) {
+       qWarning() << "Fail to call 'syncProfilesByKey'" << reply.error().message();
+    } else {
+       profiles = reply.value();
+    }
+
+    m_profilesByCategory = paserProfiles(profiles);
+    m_reloadProfilesWatcher.take()->deleteLater();
+
+    // notify property change
+    emit profilesChanged();
+}
+
+void ButeoSyncFW::onSyncStatusChanged()
+{
+    m_waitSyncStart = false;
 }

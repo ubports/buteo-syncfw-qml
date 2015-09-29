@@ -24,12 +24,13 @@ Item {
     property var buteoComponent
 
     TestCase {
-        id: vcardParser
         name: 'ButeoSyncFWTestCase'
 
         function init()
         {
             buteoComponent = Qt.createQmlObject('import Buteo 0.1; ButeoSync{ }', root);
+            // wait profiles to load
+            tryCompare(buteoComponent, 'profilesCount', 4)
         }
 
         function cleanup()
@@ -45,6 +46,27 @@ Item {
                 buteoComponent.destroy()
                 buteoComponent = null
             }
+        }
+
+        function cleanupTestCase()
+        {
+            // Test service dissapear
+            // We can only test it on 'cleanupTestCase' because it will cause the dbus
+            // service to dissapear and any test after this call will fail
+            buteoComponent = Qt.createQmlObject('import Buteo 0.1; ButeoSync{ }', root);
+
+            var spy = Qt.createQmlObject('import QtTest 1.0; SignalSpy{ }', root);
+            spy.target = buteoComponent
+            spy.signalName = "profilesChanged"
+
+            buteoComponent.abortSync('quit')
+
+            tryCompare(spy, "count", 1)
+            tryCompare(buteoComponent, 'syncing', false)
+            tryCompare(buteoComponent, 'visibleSyncProfiles', [])
+
+            buteoComponent.destroy()
+            buteoComponent = null
         }
 
         function test_start_sync()
@@ -99,7 +121,7 @@ Item {
 
         function test_visibleSyncProfiles_property()
         {
-            compare(buteoComponent.visibleSyncProfiles.length, 4)
+            tryCompare(buteoComponent, 'profilesCount', 4)
             var spy = Qt.createQmlObject('import QtTest 1.0; SignalSpy{ }', root);
             spy.target = buteoComponent
             spy.signalName = "profileChanged"
@@ -109,7 +131,7 @@ Item {
             compare(spy.signalArguments[0][0], '3')
             compare(spy.signalArguments[0][1], ButeoSync.ProfileRemoved)
             compare(spy.signalArguments[0][2], 'deleted')
-            compare(buteoComponent.visibleSyncProfiles.length, 3)
+            tryCompare(buteoComponent, 'profilesCount', 3)
             spy.clear()
 
             buteoComponent.removeProfile('2')
@@ -117,7 +139,7 @@ Item {
             compare(spy.signalArguments[0][0], '2')
             compare(spy.signalArguments[0][1], ButeoSync.ProfileRemoved)
             compare(spy.signalArguments[0][2], 'deleted')
-            compare(buteoComponent.visibleSyncProfiles.length, 2)
+            tryCompare(buteoComponent, 'profilesCount', 2)
             spy.clear()
 
             buteoComponent.removeProfile('1')
@@ -125,7 +147,7 @@ Item {
             compare(spy.signalArguments[0][0], '1')
             compare(spy.signalArguments[0][1], ButeoSync.ProfileRemoved)
             compare(spy.signalArguments[0][2], 'deleted')
-            compare(buteoComponent.visibleSyncProfiles.length, 1)
+            tryCompare(buteoComponent, 'profilesCount', 1)
             spy.clear()
 
             buteoComponent.removeProfile('0')
@@ -133,7 +155,7 @@ Item {
             compare(spy.signalArguments[0][0], '0')
             compare(spy.signalArguments[0][1], ButeoSync.ProfileRemoved)
             compare(spy.signalArguments[0][2], 'deleted')
-            compare(buteoComponent.visibleSyncProfiles.length, 0)
+            tryCompare(buteoComponent, 'profilesCount', 0)
             spy.clear()
         }
 
@@ -141,8 +163,8 @@ Item {
         {
             var profiles = buteoComponent.syncProfilesByCategory('contacts')
             compare(profiles.length, 2)
-            compare(profiles[0], 'test-profile')
-            compare(profiles[1], '63807467')
+            compare(profiles[0], '63807467')
+            compare(profiles[1], 'test-profile')
         }
 
         function test_sync_by_category()
@@ -156,19 +178,19 @@ Item {
             // wait for two signals (since we have two contacts profiles)
             tryCompare(spy, "count", 2)
             // first profile
-            compare(spy.signalArguments[0][0], 'test-profile')
+            compare(spy.signalArguments[0][0], '63807467')
             compare(spy.signalArguments[0][1], ButeoSync.SyncStarted)
             compare(spy.signalArguments[0][2], '')
 
             // secound profile
-            compare(spy.signalArguments[1][0], '63807467')
+            compare(spy.signalArguments[1][0], 'test-profile')
             compare(spy.signalArguments[1][1], ButeoSync.SyncStarted)
             compare(spy.signalArguments[1][2], '')
 
             var activeProfiles = buteoComponent.getRunningSyncList()
             compare(activeProfiles.length, 2)
-            compare(activeProfiles[0], 'test-profile')
-            compare(activeProfiles[1], '63807467')
+            compare(activeProfiles[0], '63807467')
+            compare(activeProfiles[1], 'test-profile')
         }
     }
 }

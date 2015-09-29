@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (C) 2015 Canonical, Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,20 +18,23 @@
 #include <QtQml/QQmlParserStatus>
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusServiceWatcher>
+#include <QtDBus/QDBusPendingCallWatcher>
 
 class ButeoSyncFW : public QObject, public QQmlParserStatus
 {
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
 
-    Q_PROPERTY(bool syncing READ syncing NOTIFY syncStatus)
-    Q_PROPERTY(QStringList visibleSyncProfiles READ visibleSyncProfiles NOTIFY profileChanged)
+    Q_PROPERTY(bool syncing READ syncing NOTIFY syncStatusChanged)
+    Q_PROPERTY(int profilesCount READ profilesCount NOTIFY profilesChanged)
+    Q_PROPERTY(QStringList visibleSyncProfiles READ visibleSyncProfiles NOTIFY profilesChanged)
 
 public:
     ButeoSyncFW(QObject *parent = 0);
 
     bool syncing() const;
     QStringList visibleSyncProfiles() const;
+    int profilesCount() const;
 
     // QQmlParserStatus
     void classBegin();
@@ -110,6 +113,12 @@ signals:
     void syncStatus(QString aProfileId, int aStatus,
                     QString aMessage, int aStatusDetails);
 
+    /*!
+     * syncStatus notify signal
+     */
+    void syncStatusChanged();
+    void profilesChanged();
+
 public slots:
     /*!
      * \brief Requests to starts synchronizing using a profile Id
@@ -124,7 +133,7 @@ public slots:
      * \return True if a profile with the Id was found. Otherwise
      *  false and no status change signals will follow from this request.
      */
-    bool startSync(const QString &aProfileId) const;
+    bool startSync(const QString &aProfileId);
 
     /*!
      * \brief Requests to starts synchronizing using a profile category
@@ -135,7 +144,7 @@ public slots:
      *
      * \see ButeoSyncFW::startSync
      */
-    bool startSyncByCategory(const QString &category) const;
+    bool startSyncByCategory(const QString &category);
 
     /*!
      * \brief Stops synchronizing the profile with the given Id.
@@ -171,11 +180,20 @@ public slots:
 
 private slots:
     void serviceOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
+    void onSyncProfilesByKeyFinished(QDBusPendingCallWatcher *watcher);
+    void onAllVisibleSyncProfilesFinished(QDBusPendingCallWatcher *watcher);
+    void onSyncStatusChanged();
+    void reloadProfiles();
 
 private:
     QScopedPointer<QDBusInterface> m_iface;
     QScopedPointer<QDBusServiceWatcher> m_serviceWatcher;
+    QScopedPointer<QDBusPendingCallWatcher> m_reloadProfilesWatcher;
+    QMultiMap<QString, QPair<QString, bool> > m_profilesByCategory;
+    bool m_waitSyncStart;
 
     void initialize();
     void deinitialize();
+    QStringList profiles(const QString &category = QString(), bool onlyEnabled=false) const;
+    QMultiMap<QString, QPair<QString, bool> > paserProfiles(const QStringList &profiles) const;
 };
