@@ -1,3 +1,10 @@
+buteo-syncfw-qml (0.1+15.10.20151008-0ubuntu1) wily; urgency=medium
+
+  [ Renato Araujo Oliveira Filho ]
+  * Rename uoa contacts service to avoid conflict with old services.
+
+ -- Bill Filler <ci-train-bot@canonical.com>  Thu, 08 Oct 2015 18:49:26 +0000
+
 buteo-syncfw-qml (0.1+15.10.20150929-0ubuntu1) wily; urgency=medium
 
   [ Ken VanDine ]
