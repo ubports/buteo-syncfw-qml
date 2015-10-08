@@ -35,7 +35,7 @@ class ButeoSyncFw(dbus.service.Object):
 """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <profile type=\"sync\" name=\"test-profile\">
     <key value=\"45\" name=\"accountid\"/>
-    <key value=\"contacts\" name=\"category\"/>
+    <key value=\"buteo-contacts\" name=\"category\"/>
     <key value=\"google.Contacts-\" name=\"displayname\"/>
     <key value=\"true\" name=\"enabled\"/>
     <key value=\"true\" name=\"hidden\"/>
@@ -58,7 +58,7 @@ class ButeoSyncFw(dbus.service.Object):
 """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <profile name=\"63807467\" type=\"sync\">
     <key value=\"110\" name=\"accountid\"/>
-    <key value=\"contacts\" name=\"category\"/>
+    <key value=\"buteo-contacts\" name=\"category\"/>
     <key value=\"online\" name=\"destinationtype\"/>
     <key value=\"google-contacts-renato.teste2@gmail.com\" name=\"displayname\"/>
     <key value=\"true\" name=\"enabled\"/>
@@ -81,7 +81,7 @@ class ButeoSyncFw(dbus.service.Object):
 </profile>""",
 """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <profile type=\"sync\" name=\"template-profile\">
-    <key value=\"contacts\" name=\"category\"/>
+    <key value=\"buteo-contacts\" name=\"category\"/>
     <key value=\"false\" name=\"enabled\"/>
     <schedule syncconfiguredtime=\"\" interval=\"0\" days=\"\" externalsync=\"true\" time=\"\" enabled=\"false\">
         <rush interval=\"0\" days=\"\" externalsync=\"false\" begin=\"\" enabled=\"false\" end=\"\"/>
@@ -105,7 +105,7 @@ class ButeoSyncFw(dbus.service.Object):
     def syncProfilesByKey(self, key, value):
         print ("syncProfilesByKey:", key, value)
         if key == 'category':
-            if value == 'contacts':
+            if value == 'buteo-contacts':
                 return [ButeoSyncFw.PROFILES[0], ButeoSyncFw.PROFILES[2], ButeoSyncFw.PROFILES[3]]
             if value == 'calendar':
                 return [ButeoSyncFw.PROFILES[1]]

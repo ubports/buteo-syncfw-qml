@@ -161,7 +161,7 @@ Item {
 
         function test_sync_by_profile_by_category()
         {
-            var profiles = buteoComponent.syncProfilesByCategory('contacts')
+            var profiles = buteoComponent.syncProfilesByCategory('buteo-contacts')
             compare(profiles.length, 2)
             compare(profiles[0], '63807467')
             compare(profiles[1], 'test-profile')
@@ -173,7 +173,7 @@ Item {
             spy.target = buteoComponent
             spy.signalName = "syncStatus"
 
-            compare(buteoComponent.startSyncByCategory('contacts'), true)
+            compare(buteoComponent.startSyncByCategory('buteo-contacts'), true)
 
             // wait for two signals (since we have two contacts profiles)
             tryCompare(spy, "count", 2)
