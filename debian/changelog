@@ -1,3 +1,9 @@
+buteo-syncfw-qml (0.1+16.10.20160919-0ubuntu1) yakkety; urgency=medium
+
+  * Expose 'serviceAvailable' property.
+
+ -- Renato Araujo Oliveira Filho <renato.filho@canonical.com>  Mon, 19 Sep 2016 17:45:10 +0000
+
 buteo-syncfw-qml (0.1+15.10.20151008-0ubuntu1) wily; urgency=medium
 
   [ Renato Araujo Oliveira Filho ]
