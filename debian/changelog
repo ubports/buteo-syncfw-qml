@@ -1,3 +1,9 @@
+buteo-syncfw-qml (0.2+ubports) vivid; urgency=medium
+
+  * Imported to UBports
+
+ -- UBports auto importer <infra@ubports.com>  Mon, 16 Oct 2017 18:17:09 +0200
+
 buteo-syncfw-qml (0.1+16.10.20160919-0ubuntu1) yakkety; urgency=medium
 
   * Expose 'serviceAvailable' property.
