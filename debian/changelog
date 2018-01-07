@@ -1,3 +1,9 @@
+buteo-syncfw-qml (0.2+ubports1) xenial; urgency=medium
+
+  * No change rebuild for ubports xenial repo
+
+ -- Dan Chapman <dan@ubports.com>  Sun, 07 Jan 2018 09:13:15 +0000
+
 buteo-syncfw-qml (0.2+ubports) vivid; urgency=medium
 
   * Imported to UBports
